@@ -7,9 +7,9 @@ package com.ljx.springframework.beans;
 public class PropertyValue {
     private final String name;
 
-    private final String value;
+    private final Object value;
 
-    public PropertyValue(String name, String value) {
+    public PropertyValue(String name, Object value) {
         this.name = name;
         this.value = value;
     }
@@ -18,7 +18,7 @@ public class PropertyValue {
         return name;
     }
 
-    public String getValue() {
+    public Object getValue() {
         return value;
     }
 }

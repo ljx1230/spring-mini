@@ -1,5 +1,6 @@
 package com.ljx.springframework.beans.factory.support;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.ljx.springframework.beans.BeansException;
 import com.ljx.springframework.beans.PropertyValue;
 import com.ljx.springframework.beans.factory.config.BeanDefinition;
@@ -30,9 +31,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
         addSingleton(beanName,bean); // 加入容器中
         return bean;
     }
-
+    // 实例化bean
     protected Object createBeanInstance(BeanDefinition beanDefinition) {
-        return instantiationStrategy.instantiate(beanDefinition);
+        return getInstantiationStrategy().instantiate(beanDefinition);
     }
 
     public void setInstantiationStrategy(InstantiationStrategy instantiationStrategy) {
@@ -46,14 +47,16 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
     // 为bean注入属性
     protected void applyPropertyValues(String beanName,Object bean,BeanDefinition beanDefinition) {
         try {
-            Class beanClass = beanDefinition.getBeanClass();
             for(PropertyValue propertyValue : beanDefinition.getPropertyValues().getPropertyValues()) {
                 String name = propertyValue.getName();
-                String value = propertyValue.getValue();
-                Class<?> type = beanClass.getDeclaredField(name).getType();
-                String methodName = "set" + name.substring(0,1).toUpperCase() + name.substring(1); // 获取set方法名
-                Method method = beanClass.getDeclaredMethod(methodName, new Class[]{type});
-                method.invoke(bean,new Object[]{value});
+                Object value = propertyValue.getValue();
+                // 通过set方法注入属性
+//                Class<?> type = beanClass.getDeclaredField(name).getType();
+//                String methodName = "set" + name.substring(0,1).toUpperCase() + name.substring(1); // 获取set方法名
+//                Method method = beanClass.getDeclaredMethod(methodName, new Class[]{type});
+//                method.invoke(bean,new Object[]{value});
+                // 通过反射设置属性
+                BeanUtil.setFieldValue(bean,name,value);
             }
         } catch (Exception e) {
             throw new BeansException("Error setting property values for bean: " + beanName, e);
