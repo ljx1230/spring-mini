@@ -4,8 +4,8 @@ import cn.hutool.core.bean.BeanUtil;
 import com.ljx.springframework.beans.BeansException;
 import com.ljx.springframework.beans.PropertyValue;
 import com.ljx.springframework.beans.factory.config.BeanDefinition;
+import com.ljx.springframework.beans.factory.config.BeanReference;
 
-import java.lang.reflect.Method;
 
 /**
  * @Author: ljx
@@ -50,6 +50,13 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
             for(PropertyValue propertyValue : beanDefinition.getPropertyValues().getPropertyValues()) {
                 String name = propertyValue.getName();
                 Object value = propertyValue.getValue();
+
+                if(value instanceof BeanReference) {
+                    // 如果注入的属性是一个Bean，则获取这个bean
+                    BeanReference beanReference = (BeanReference) value;
+                    value = getBean(beanReference.getBeanName());
+                }
+
                 // 通过set方法注入属性
 //                Class<?> type = beanClass.getDeclaredField(name).getType();
 //                String methodName = "set" + name.substring(0,1).toUpperCase() + name.substring(1); // 获取set方法名

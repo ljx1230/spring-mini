@@ -1,9 +1,11 @@
-package com.ljx.springframework.beans.factory;
+package com.ljx.springframework.test.ioc;
 
 import com.ljx.springframework.beans.PropertyValue;
 import com.ljx.springframework.beans.PropertyValues;
 import com.ljx.springframework.beans.factory.config.BeanDefinition;
 import com.ljx.springframework.beans.factory.support.DefaultListableBeanFactory;
+import com.ljx.springframework.test.ioc.bean.Person;
+import com.ljx.springframework.test.ioc.service.HelloService;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,16 +26,5 @@ public class BeanFactoryTest {
         System.out.println(helloService);
     }
 
-    @Test
-    public void testPopulateBeanWithPropertyValues() throws Exception {
-        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
-        PropertyValues propertyValues = new PropertyValues();
-        propertyValues.addPropertyValue(new PropertyValue("name","ljx"));
-        propertyValues.addPropertyValue(new PropertyValue("age",21));
-        BeanDefinition beanDefinition = new BeanDefinition(Person.class,propertyValues);
-        beanFactory.registerBeanDefinitionRegistry("person",beanDefinition);
-        Person person = (Person) beanFactory.getBean("person");
-        System.out.println(person);
-    }
 
 }
