@@ -17,4 +17,10 @@ public interface ListableBeanFactory extends BeanFactory{
      * @throws BeansException
      */
     <T> Map<String,T> getBeansOfType(Class<T> type) throws BeansException;
+
+    /**
+     * 返回所有定义的Bean的名称
+     * @return
+     */
+    String[] getBeanDefinitionNames();
 }
