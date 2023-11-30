@@ -8,6 +8,7 @@ import com.ljx.springframework.beans.PropertyValues;
 import com.ljx.springframework.beans.factory.config.BeanDefinition;
 import com.ljx.springframework.beans.factory.config.BeanReference;
 import com.ljx.springframework.beans.factory.support.AbstractBeanDefinitionReader;
+import com.ljx.springframework.beans.factory.support.BeanDefinitionReader;
 import com.ljx.springframework.beans.factory.support.BeanDefinitionRegistry;
 import com.ljx.springframework.core.io.Resource;
 import com.ljx.springframework.core.io.ResourceLoader;
@@ -15,6 +16,7 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
+import java.io.IOException;
 import java.io.InputStream;
 
 /**
@@ -36,8 +38,12 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
         super(registry);
     }
 
+    public XmlFileBeanDefinitionReader(BeanDefinitionRegistry registry,ResourceLoader resourceLoader) {
+        super(registry,resourceLoader);
+    }
+
     @Override
-    public void loadBeanDefinitions(Resource resource) throws BeansException {
+    public void loadBeanDefinitions(Resource resource){
         try {
             InputStream inputStream = resource.getInputStream();
             try {
@@ -45,7 +51,7 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
             } finally {
                 inputStream.close();
             }
-        } catch (Exception e) {
+        } catch (IOException e) {
             throw new BeansException("IOException 解析xml文档失败:" + resource, e);
         }
     }
@@ -55,10 +61,10 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
      * @throws Exception
      * 做具体xml文档解析
      */
-    protected void doLoadBeanDefinitions(InputStream inputStream) throws Exception{
+    protected void doLoadBeanDefinitions(InputStream inputStream){
         Document document = XmlUtil.readXML(inputStream);
 
-        Element root = document.getDocumentElement(); //
+        Element root = document.getDocumentElement();
 
         NodeList childNodes = root.getChildNodes();
 
@@ -73,7 +79,12 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
                     String name = bean.getAttribute(NAME_ATTRIBUTE);
                     String className = bean.getAttribute(CLASS_ATTRIBUTE);
 
-                    Class<?> clazz = Class.forName(className);
+                    Class<?> clazz = null;
+                    try {
+                        clazz = Class.forName(className);
+                    } catch (ClassNotFoundException e) {
+                        throw new BeansException("找不到 class [" + className + "]");
+                    }
 
                     // id属性的优先级高于name属性
                     String beanName = StrUtil.isNotEmpty(id) ? id : name;
@@ -95,6 +106,10 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
                                 String valueAttribute = property.getAttribute(VALUE_ATTRIBUTE);
                                 String refAttribute = property.getAttribute(REF_ATTRIBUTE);
 
+                                if(StrUtil.isEmpty(nameAttribute)) {
+                                    throw new BeansException("name属性不能为空字符串或者null");
+                                }
+
                                 Object value = valueAttribute;
 
                                 if(StrUtil.isNotEmpty(refAttribute)) {
@@ -104,6 +119,10 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
                                 beanDefinition.getPropertyValues().addPropertyValue(propertyValue);
                             }
                         }
+                    }
+                    if(getRegistry().containsBeanDefinition(beanName)) {
+                        // bean的名字不能重复
+                        throw new BeansException("bean的名字重复了[" + beanName + "]");
                     }
                     getRegistry().registerBeanDefinitionRegistry(beanName,beanDefinition);
                 }

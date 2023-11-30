@@ -1,5 +1,6 @@
 package com.ljx.springframework.beans.factory.support;
 
+import com.ljx.springframework.beans.BeansException;
 import com.ljx.springframework.beans.factory.config.BeanDefinition;
 
 /**
@@ -10,4 +11,17 @@ import com.ljx.springframework.beans.factory.config.BeanDefinition;
 public interface BeanDefinitionRegistry {
     // 向注册表中注BeanDefinition
     void registerBeanDefinitionRegistry(String name, BeanDefinition beanDefinition);
+
+    /**
+     * 根据名称获取BeanDefinition
+     * @return
+     */
+    BeanDefinition getBeanDefinition(String beanName) throws BeansException;
+
+    /**
+     * 判断是否包含指定名称的BeanDefinition实例
+     * @param beanName
+     * @return
+     */
+    boolean containsBeanDefinition(String beanName);
 }
