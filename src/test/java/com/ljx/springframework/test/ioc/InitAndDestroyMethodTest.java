@@ -13,8 +13,10 @@ public class InitAndDestroyMethodTest {
     public void testInitAndDestroyMethod() throws Exception {
         ClassPathXmlApplicationContext context =
                 new ClassPathXmlApplicationContext("classpath:init-and-destroy-method.xml");
-//        Person person = context.getBean("person", Person.class);
-//        System.out.println(person);
-        context.close();
+
+        context.registerShutdownHook();
+
+        Person person = context.getBean("person", Person.class);
+        System.out.println(person);
     }
 }

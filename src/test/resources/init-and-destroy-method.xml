@@ -3,6 +3,7 @@
 
     <bean id="person" class="com.ljx.springframework.test.ioc.bean.Person" init-method="customInitMethod" destroy-method="customDestroyMethod">
         <property name="name" value="ljx"/>
+        <property name="age" value="21"/>
         <property name="car" ref="car"/>
     </bean>
 
