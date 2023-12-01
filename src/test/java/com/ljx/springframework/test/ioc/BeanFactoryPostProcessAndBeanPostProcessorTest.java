@@ -1,3 +1,5 @@
+package com.ljx.springframework.test.ioc;
+
 import com.ljx.springframework.beans.factory.support.DefaultListableBeanFactory;
 import com.ljx.springframework.beans.factory.xml.XmlFileBeanDefinitionReader;
 import com.ljx.springframework.test.ioc.bean.Car;
