@@ -34,6 +34,11 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
     public static final String VALUE_ATTRIBUTE = "value";
     public static final String REF_ATTRIBUTE = "ref";
 
+    public static final String INIT_METHOD_ATTRIBUTE = "init-method";
+
+    public static final String DESTROY_METHOD_ATTRIBUTE = "destroy-method";
+
+
     public XmlFileBeanDefinitionReader(BeanDefinitionRegistry registry) {
         super(registry);
     }
@@ -78,6 +83,8 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
                     String id = bean.getAttribute(ID_ATTRIBUTE);
                     String name = bean.getAttribute(NAME_ATTRIBUTE);
                     String className = bean.getAttribute(CLASS_ATTRIBUTE);
+                    String initMethodName = bean.getAttribute(INIT_METHOD_ATTRIBUTE);
+                    String destroyMethodName = bean.getAttribute(DESTROY_METHOD_ATTRIBUTE);
 
                     Class<?> clazz = null;
                     try {
@@ -95,6 +102,8 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
                     }
 
                     BeanDefinition beanDefinition = new BeanDefinition(clazz);
+                    beanDefinition.setInitMethodName(initMethodName);
+                    beanDefinition.setDestroyMethodName(destroyMethodName);
 
                     // 注入属性
                     for(int j = 0;j < bean.getChildNodes().getLength();++j) {
