@@ -3,7 +3,7 @@
 
     <bean id="person" class="com.ljx.springframework.test.ioc.bean.Person">
         <property name="name" value="ljx"/>
-        <property name="age" value="18"/>
+        <property name="age" value="21"/>
         <property name="car" ref="car"/>
     </bean>
 
