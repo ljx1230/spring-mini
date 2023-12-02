@@ -11,7 +11,9 @@
         <property name="brand" value="byd"/>
     </bean>
 
-    <bean class="com.ljx.springframework.test.ioc.common.CustomBeanFactoryPostProcessor"/>
-    <bean class="com.ljx.springframework.test.ioc.common.CustomerBeanPostProcessor"/>
+    <bean id="helloService" class="com.ljx.springframework.test.ioc.service.HelloService"/>
+
+<!--    <bean class="com.ljx.springframework.test.ioc.common.CustomBeanFactoryPostProcessor"/>-->
+<!--    <bean class="com.ljx.springframework.test.ioc.common.CustomerBeanPostProcessor"/>-->
 
 </beans>

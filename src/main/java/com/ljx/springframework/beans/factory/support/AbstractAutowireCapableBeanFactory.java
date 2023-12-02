@@ -5,6 +5,8 @@ import cn.hutool.core.util.ClassUtil;
 import cn.hutool.core.util.StrUtil;
 import com.ljx.springframework.beans.BeansException;
 import com.ljx.springframework.beans.PropertyValue;
+import com.ljx.springframework.beans.factory.BeanFactory;
+import com.ljx.springframework.beans.factory.BeanFactoryAware;
 import com.ljx.springframework.beans.factory.DisposableBean;
 import com.ljx.springframework.beans.factory.InitializingBean;
 import com.ljx.springframework.beans.factory.config.AutowireCapableBeanFactory;
@@ -50,6 +52,9 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
     }
 
     protected Object initializeBean(String beanName, Object bean, BeanDefinition beanDefinition) {
+        if(bean instanceof BeanFactoryAware) {
+            ((BeanFactoryAware) bean).setBeanFactory(this);
+        }
         // 执行前置处理器
         Object wrappedBean = applyBeanPostProcessorsBeforeInitialization(bean, beanName);
 
@@ -143,7 +148,5 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
             throw new BeansException("Error setting property values for bean: " + beanName, e);
         }
     }
-
-
 
 }
