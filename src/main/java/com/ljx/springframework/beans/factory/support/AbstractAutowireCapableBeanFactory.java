@@ -45,6 +45,7 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
         if(beanDefinition.isSingleton()) {
             addSingleton(beanName,bean); // 加入容器中
         }
+
         return bean;
     }
 
