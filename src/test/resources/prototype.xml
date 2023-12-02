@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans >
+    <bean id="car" class="com.ljx.springframework.test.ioc.bean.Car" scope="prototype">
+        <property name="brand" value="byd"/>
+    </bean>
+    <bean id="person" class="com.ljx.springframework.test.ioc.bean.Person">
+        <property name="name" value="ljx"/>
+        <property name="age" value="21"/>
+    </bean>
+
+</beans>
