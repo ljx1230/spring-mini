@@ -9,5 +9,5 @@ import com.ljx.springframework.core.io.ResourceLoader;
  * @Author: ljx
  * @Date: 2023/12/1 14:10
  */
-public interface ApplicationContext extends ListableBeanFactory, HierarchicalBeanFactory, ResourceLoader {
+public interface ApplicationContext extends ListableBeanFactory, HierarchicalBeanFactory, ResourceLoader,ApplicationEventPublisher {
 }
