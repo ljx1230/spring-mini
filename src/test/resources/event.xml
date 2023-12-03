@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <beans>
-    <bean class="com.ljx.springframework.test.ioc.common.event.ContextRefreshedEventListener"/>
+    <bean class="com.ljx.springframework.test.common.event.ContextRefreshedEventListener"/>
 
-    <bean class="com.ljx.springframework.test.ioc.common.event.CustomEventListener"/>
+    <bean class="com.ljx.springframework.test.common.event.CustomEventListener"/>
 
-    <bean class="com.ljx.springframework.test.ioc.common.event.ContextClosedEventListener"/>
+    <bean class="com.ljx.springframework.test.common.event.ContextClosedEventListener"/>
 </beans>

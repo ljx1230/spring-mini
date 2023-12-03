@@ -1,4 +1,4 @@
-package com.ljx.springframework.test.ioc.bean;
+package com.ljx.springframework.test.bean;
 
 /**
  * @Author: ljx

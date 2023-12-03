@@ -5,8 +5,8 @@ import com.ljx.springframework.beans.PropertyValues;
 import com.ljx.springframework.beans.factory.config.BeanDefinition;
 import com.ljx.springframework.beans.factory.config.BeanReference;
 import com.ljx.springframework.beans.factory.support.DefaultListableBeanFactory;
-import com.ljx.springframework.test.ioc.bean.Car;
-import com.ljx.springframework.test.ioc.bean.Person;
+import com.ljx.springframework.test.bean.Car;
+import com.ljx.springframework.test.bean.Person;
 import org.junit.Test;
 
 /**

@@ -5,8 +5,8 @@ import com.ljx.springframework.beans.factory.xml.XmlFileBeanDefinitionReader;
 import com.ljx.springframework.core.io.DefaultResourceLoader;
 import com.ljx.springframework.core.io.Resource;
 import com.ljx.springframework.core.io.ResourceLoader;
-import com.ljx.springframework.test.ioc.bean.Car;
-import com.ljx.springframework.test.ioc.bean.Person;
+import com.ljx.springframework.test.bean.Car;
+import com.ljx.springframework.test.bean.Person;
 import org.junit.Test;
 
 /**

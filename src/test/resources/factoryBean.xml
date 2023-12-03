@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <beans >
-    <bean id="car" class="com.ljx.springframework.test.ioc.bean.CarFactoryBean">
+    <bean id="car" class="com.ljx.springframework.test.bean.CarFactoryBean">
         <property name="brand" value="byd"/>
     </bean>
 </beans>

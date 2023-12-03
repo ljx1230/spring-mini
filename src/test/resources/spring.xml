@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <beans>
 
-    <bean id="person" class="com.ljx.springframework.test.ioc.bean.Person">
+    <bean id="person" class="com.ljx.springframework.test.bean.Person">
         <property name="name" value="ljx"/>
         <property name="age" value="21"/>
         <property name="car" ref="car"/>
     </bean>
 
-    <bean id="car" class="com.ljx.springframework.test.ioc.bean.Car">
+    <bean id="car" class="com.ljx.springframework.test.bean.Car">
         <property name="brand" value="byd"/>
     </bean>
 
-    <bean id="helloService" class="com.ljx.springframework.test.ioc.service.HelloService"/>
+    <bean id="helloService" class="com.ljx.springframework.test.service.HelloService"/>
 
 <!--    <bean class="com.ljx.springframework.test.ioc.common.CustomBeanFactoryPostProcessor"/>-->
 <!--    <bean class="com.ljx.springframework.test.ioc.common.CustomerBeanPostProcessor"/>-->

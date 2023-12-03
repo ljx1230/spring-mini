@@ -4,8 +4,7 @@ import com.ljx.springframework.beans.PropertyValue;
 import com.ljx.springframework.beans.PropertyValues;
 import com.ljx.springframework.beans.factory.config.BeanDefinition;
 import com.ljx.springframework.beans.factory.support.DefaultListableBeanFactory;
-import com.ljx.springframework.test.ioc.bean.Person;
-import com.ljx.springframework.test.ioc.service.HelloService;
+import com.ljx.springframework.test.service.HelloService;
 import org.junit.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;

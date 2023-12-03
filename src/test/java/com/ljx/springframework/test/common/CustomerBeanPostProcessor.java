@@ -1,8 +1,8 @@
-package com.ljx.springframework.test.ioc.common;
+package com.ljx.springframework.test.common;
 
 import com.ljx.springframework.beans.BeansException;
 import com.ljx.springframework.beans.factory.config.BeanPostProcessor;
-import com.ljx.springframework.test.ioc.bean.Car;
+import com.ljx.springframework.test.bean.Car;
 
 /**
  * @Author: ljx

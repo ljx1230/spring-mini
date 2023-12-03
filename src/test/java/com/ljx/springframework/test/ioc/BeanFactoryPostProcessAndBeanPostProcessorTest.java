@@ -2,10 +2,10 @@ package com.ljx.springframework.test.ioc;
 
 import com.ljx.springframework.beans.factory.support.DefaultListableBeanFactory;
 import com.ljx.springframework.beans.factory.xml.XmlFileBeanDefinitionReader;
-import com.ljx.springframework.test.ioc.bean.Car;
-import com.ljx.springframework.test.ioc.bean.Person;
-import com.ljx.springframework.test.ioc.common.CustomBeanFactoryPostProcessor;
-import com.ljx.springframework.test.ioc.common.CustomerBeanPostProcessor;
+import com.ljx.springframework.test.bean.Car;
+import com.ljx.springframework.test.bean.Person;
+import com.ljx.springframework.test.common.CustomBeanFactoryPostProcessor;
+import com.ljx.springframework.test.common.CustomerBeanPostProcessor;
 import org.junit.Test;
 
 /**

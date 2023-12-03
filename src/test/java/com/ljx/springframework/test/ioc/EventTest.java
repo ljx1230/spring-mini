@@ -1,7 +1,7 @@
 package com.ljx.springframework.test.ioc;
 
 import com.ljx.springframework.context.support.ClassPathXmlApplicationContext;
-import com.ljx.springframework.test.ioc.common.event.CustomEvent;
+import com.ljx.springframework.test.common.event.CustomEvent;
 import org.junit.Test;
 
 /**
