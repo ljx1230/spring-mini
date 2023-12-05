@@ -17,7 +17,7 @@ public class PointcutExpressionTest {
                 = new AspectJExpressionPointCut("execution(* com.ljx.springframework.test.service.HelloService.*(..))");
         Class<HelloService> helloServiceClass = HelloService.class;
         Method method = helloServiceClass.getDeclaredMethod("sayHello");
-        
+
         System.out.println(pointCut.matches(helloServiceClass));
         System.out.println(pointCut.matches(method,helloServiceClass));
     }
