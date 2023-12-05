@@ -166,12 +166,88 @@ public class DefaultListableBeanFactory extends AbstractAutowireCapableBeanFacto
 我们创建一个BeanDefinition，传入一个HelloService的Class，
 DefaultListableBeanFactory实现了BeanDefinitionRegistry接口，
 因此我们可以在此处注册BeanDefinition，接着调用getBean方法，尝试获取Bean实例，
-调用getBean之后，我们会走到AbstractBeanFactory类中的getBean方法，这个类继承自DefaultSingletonBeanRegistry
-，因此我们会调用DefaultSingletonBeanRegistry的getSingleton方法，可惜容器中此时还没有这个对象，
+调用getBean之后，我们会走到AbstractBeanFactory类中的getBean方法，这个类继承自DefaultSingletonBeanRegistry，因此我们会调用DefaultSingletonBeanRegistry的getSingleton方法，可惜容器中此时还没有这个对象，
 因此我们会创建这个对象，首先根据bean的名称获取BeanDefinition，
 然后调用createBean方法，此时会调用了AbstractAutowireCapableBeanFactory中实现的doCreateBean方法，
 在这个方法中获取Bean的Class，然后通过反射实例化Bean，接着调用 addSingleton，将它添加到容器中，
 并且将实例化后的bean返回。最后一步步返回给了测试方法中的getBean的返回值。
 然后我们就可以正常使用这个bean了。
 
-### 给Bean填充属性
+### 定义Bean的实例化策略
+目前我们实现了创建一个不含有属性的Bean，接着来定义一下Bean的实例化策略，
+首先，依然是创建一个接口，在这个接口中我们定义一个实例化bean的方法，我们可以创建不同的实现类，
+来定义不同的实例化策略。
+```java
+public interface InstantiationStrategy {
+    Object instantiate(BeanDefinition beanDefinition) throws BeansException;
+}
+```
+我们来简单的创建两个实现类吧，首先创建一个最简单的实例化策略，也就是根据类的类型，直接反射实例化
+```java
+public class SimpleInstantiationStrategy implements InstantiationStrategy{
+    // 简单的bean实例化策略，根据bean的无参构造函数实例化对象
+    @Override
+    public Object instantiate(BeanDefinition beanDefinition) throws BeansException {
+        Class beanClass = beanDefinition.getBeanClass();
+        try {
+            Constructor constructor = beanClass.getDeclaredConstructor();
+            return constructor.newInstance();
+
+        } catch (Exception e) {
+        }
+        return null;
+    }
+}
+```
+我们也可以通过CGLIB动态创建子类
+```java
+public class CglibSubclassingInstantiationStrategy implements InstantiationStrategy{
+    @Override
+    public Object instantiate(BeanDefinition beanDefinition) throws BeansException {
+        Enhancer enhancer = new Enhancer();
+        enhancer.setSuperclass(beanDefinition.getBeanClass());
+        enhancer.setCallback((MethodInterceptor) (obj, method, argsTemp, proxy) -> proxy.invokeSuper(obj,argsTemp));
+        return enhancer.create();
+    }
+}
+```
+
+我们来修改一下AbstractAutowireCapableBeanFactory类，我们添加一个InstantiationStrategy类型成员变量，并且将他默认实例化为SimpleInstantiationStrategy的对象。
+然后在doCreateBean方法中不直接通过类名放射调用，而是直接调用实例化策略类的实例化方法。
+具体代码如下：
+```java
+public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFactory{
+
+    private InstantiationStrategy instantiationStrategy = new SimpleInstantiationStrategy();
+    @Override
+    protected Object createBean(String beanName, BeanDefinition beanDefinition) throws BeansException {
+        return doCreateBean(beanName,beanDefinition);
+    }
+    protected Object doCreateBean(String beanName,BeanDefinition beanDefinition) {
+        // Class beanClass = beanDefinition.getBeanClass();
+        Object bean = null;
+        try {
+            bean = createBeanInstance(beanDefinition);
+        } catch (Exception e) {
+            throw new BeansException("Instantiation of bean failed",e);
+        }
+        addSingleton(beanName,bean); // 加入容器中
+        return bean;
+    }
+
+    protected Object createBeanInstance(BeanDefinition beanDefinition) {
+        return instantiationStrategy.instantiate(beanDefinition);
+    }
+
+    public void setInstantiationStrategy(InstantiationStrategy instantiationStrategy) {
+        this.instantiationStrategy = instantiationStrategy;
+    }
+
+    public InstantiationStrategy getInstantiationStrategy() {
+        return instantiationStrategy;
+    }
+}
+```
+
+
+### 给Bean注入属性
