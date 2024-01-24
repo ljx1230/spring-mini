@@ -423,3 +423,292 @@ public class PopulateBeanWithPropertyValuesTest {
     }
 }
 ```
+### 实现资源类和资源加载器
+创建接口Resource,这是资源的抽象和访问的接口，我们可以有不同的实现类。
+```java
+public interface Resource {
+    InputStream getInputStream() throws IOException;
+}
+```
+接着我们可以创建三个Resource接口的实现类，分别是对java.net.URL进行资源定位的实现类、
+对文件系统资源定位的实现类以及对类路径下资源定位的实现类。
+```java
+public class UrlResource implements Resource{
+    private final URL url;
+    public UrlResource(URL url) {
+        this.url = url;
+    }
+    @Override
+    public InputStream getInputStream() throws IOException {
+        URLConnection con = this.url.openConnection();
+        try {
+            return con.getInputStream();
+        } catch (IOException e) {
+            throw e;
+        }
+    }
+}
+```
+```java
+public class FileSystemResource implements Resource{
+    private final String filePath;
+    public FileSystemResource(String filePath) {
+        this.filePath = filePath;
+    }
+    @Override
+    public InputStream getInputStream() throws IOException {
+        try {
+            Path path = new File(this.filePath).toPath();
+            return Files.newInputStream(path);
+        } catch (NoSuchFileException e) {
+            throw new FileNotFoundException(e.getMessage());
+        }
+    }
+}
+```
+```java
+public class ClassPathResource implements Resource{
+    private final String path;
+    public ClassPathResource(String path) {
+        this.path = path;
+    }
+    @Override
+    public InputStream getInputStream() throws IOException {
+        InputStream is = this.getClass().getClassLoader().getResourceAsStream(this.path);
+        if(is == null) {
+            throw new FileNotFoundException(this.path + " 不存在,打开失败");
+        }
+        return is;
+    }
+    public String getPath() {
+        return path;
+    }
+}
+```
+为了加载这些资源，我们首先创建一个资源加载器接口，接口提供一个获取资源的方法，资源加载器可以有不同的实现类。
+```java
+public interface ResourceLoader {
+    Resource getResource(String location);
+}
+```
+创建一个默认的资源加载器的实现类，如果location以"classpath:"开头，那么加载classpath资源，否则当成url资源处理，如果处理发生异常，捕获该异常，当成系统文件资源处理即可。
+```java
+public class DefaultResourceLoader implements ResourceLoader{
+    public static final String CLASSPATH_URL_PREFIX = "classpath:";
+    @Override
+    public Resource getResource(String location) {
+        if(location.startsWith(CLASSPATH_URL_PREFIX)) {
+            // classpath下的资源
+            return new ClassPathResource(location.substring(CLASSPATH_URL_PREFIX.length()));
+        } else {
+            try {
+                // 当成UrlResource处理
+                URL url = new URL(location);
+                return new UrlResource(url);
+            } catch (MalformedURLException e) {
+                // 当成文件系统下的资源来处理
+                String path = location;
+                if(location.startsWith("/")) {
+                    path = location.substring(1);
+                }
+                return new FileSystemResource(path);
+            }
+        }
+    }
+}
+```
+编写测试类,测试资源加载是否成功:
+```java
+public class ResourceLoaderTest {
+    @Test
+    public void testResourceLoader() throws Exception {
+        DefaultResourceLoader defaultResourceLoader = new DefaultResourceLoader();
+
+        // 测试类路径下的加载
+        Resource resource = defaultResourceLoader.getResource("classpath:ljx.txt");
+        InputStream inputStream = resource.getInputStream();
+        String s = IoUtil.readUtf8(inputStream);
+        System.out.println(s);
+
+        // 加载文件系统中的资源
+        resource = defaultResourceLoader.getResource("D:\\code\\java-workplace\\spring-mini\\src\\test\\resources\\xxx.txt");
+        inputStream = resource.getInputStream();
+        s = IoUtil.readUtf8(inputStream);
+        System.out.println(s);
+
+        // 加载Url资源
+        resource = defaultResourceLoader.getResource("https://www.baidu.com");
+        if(resource instanceof UrlResource) {
+            System.out.println("是网络资源");
+            inputStream = resource.getInputStream();
+            s = IoUtil.readUtf8(inputStream);
+            System.out.println(s);
+        } else {
+            System.out.println("加载Url资源有问题");
+        }
+
+    }
+}
+```
+
+### 读取xml文件来配置bean
+有了资源加载器，就可以在xml格式配置文件中声明式地定义bean的信息，
+资源加载器读取xml文件，解析出bean的信息，自动往容器中注册BeanDefinition。
+
+BeanDefinitionReader是读取bean定义信息的抽象接口，
+XmlBeanDefinitionReader是从xml文件中读取的实现类。
+BeanDefinitionReader需要有获取资源的能力，
+且读取bean定义信息后需要往容器中注册BeanDefinition
+，因此BeanDefinitionReader的抽象实现类AbstractBeanDefinitionReader拥有ResourceLoader和BeanDefinitionRegistry两个属性。
+
+首先创建BeanDefinitionReader接口:
+```java
+public interface BeanDefinitionReader {
+    BeanDefinitionRegistry getRegistry();
+
+    ResourceLoader getResourceLoader();
+
+    void loadBeanDefinitions(Resource resource) throws BeansException;
+
+    void loadBeanDefinitions(String location) throws BeansException;
+
+    void loadBeanDefinitions(String[] locations) throws  BeansException;
+}
+```
+因为我们可能不只是需要从xml配置文件中读取bean信息，所以我们定义一个抽象类AbstractBeanDefinitionReader实现该接口，
+该类中有资源加载器和Bean信息的注册器两个成员变量。
+我们在这个抽象类中未实现这两个方法：因为这两个方法的实现和我们从哪里读取信息相关，我们不能放在抽象类中实现。
+```
+loadBeanDefinitions(Resource resource);
+loadBeanDefinitions(String location);
+```
+AbstractBeanDefinitionReader内容如下：
+```java
+public abstract class AbstractBeanDefinitionReader implements BeanDefinitionReader{
+    private final BeanDefinitionRegistry registry;
+    private ResourceLoader resourceLoader;
+    protected AbstractBeanDefinitionReader(BeanDefinitionRegistry registry) {
+        this.registry = registry;
+        this.resourceLoader = new DefaultResourceLoader();
+    }
+    @Override
+    public BeanDefinitionRegistry getRegistry() {
+        return registry;
+    }
+    @Override
+    public void loadBeanDefinitions(String[] locations) throws BeansException {
+        for(var location : locations) {
+            loadBeanDefinitions(location);
+        }
+    }
+    public void setResourceLoader(ResourceLoader resourceLoader) {
+        this.resourceLoader = resourceLoader;
+    }
+    @Override
+    public ResourceLoader getResourceLoader() {
+        return resourceLoader;
+    }
+}
+```
+接着创建具体的实现类XlmFileBeanDefinitionReader,该类继承自上述抽象类。首先，我们要定义标签的常量，例如bean标签，和property标签。
+还要定义属性的常量：比如id、name、class、value等等。接着从资源中获取InputStream，最后解析xml文档，将bean信息定义好后使用bean信息注册器注册bean信息。
+该类的内容如下：
+```java
+public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
+
+    public static final String BEAN_ELEMENT = "bean";
+    public static final String PROPERTY_ELEMENT = "property";
+    public static final String ID_ATTRIBUTE = "id";
+    public static final String NAME_ATTRIBUTE = "name";
+    public static final String CLASS_ATTRIBUTE = "class";
+    public static final String VALUE_ATTRIBUTE = "value";
+    public static final String REF_ATTRIBUTE = "ref";
+
+    public XmlFileBeanDefinitionReader(BeanDefinitionRegistry registry) {
+        super(registry);
+    }
+
+    @Override
+    public void loadBeanDefinitions(Resource resource) throws BeansException {
+        try {
+            InputStream inputStream = resource.getInputStream();
+            try {
+                doLoadBeanDefinitions(inputStream);
+            } finally {
+                inputStream.close();
+            }
+        } catch (Exception e) {
+            throw new BeansException("IOException 解析xml文档失败:" + resource, e);
+        }
+    }
+
+    /**
+     * @param inputStream
+     * @throws Exception
+     * 做具体xml文档解析
+     */
+    protected void doLoadBeanDefinitions(InputStream inputStream) throws Exception{
+        Document document = XmlUtil.readXML(inputStream);
+
+        Element root = document.getDocumentElement(); //
+
+        NodeList childNodes = root.getChildNodes();
+
+        for(int i = 0;i < childNodes.getLength();++i) {
+            if(childNodes.item(i) instanceof Element) {
+                // 子结点如果是一个标签
+                if(BEAN_ELEMENT.equals(((Element) childNodes.item(i)).getNodeName())) {
+                    // 子标签为bean，解析
+                    Element bean = (Element) childNodes.item(i);
+                    // 获取id、name、class属性
+                    String id = bean.getAttribute(ID_ATTRIBUTE);
+                    String name = bean.getAttribute(NAME_ATTRIBUTE);
+                    String className = bean.getAttribute(CLASS_ATTRIBUTE);
+
+                    Class<?> clazz = Class.forName(className);
+
+                    // id属性的优先级高于name属性
+                    String beanName = StrUtil.isNotEmpty(id) ? id : name;
+
+                    if (StrUtil.isEmpty(beanName)) {
+                        //如果id和name都为空，将类名的第一个字母转为小写后作为bean的名称
+                        beanName = StrUtil.lowerFirst(clazz.getSimpleName());
+                    }
+
+                    BeanDefinition beanDefinition = new BeanDefinition(clazz);
+
+                    // 注入属性
+                    for(int j = 0;j < bean.getChildNodes().getLength();++j) {
+                        if (bean.getChildNodes().item(j) instanceof Element) {
+                            if(PROPERTY_ELEMENT.equals(((Element)bean.getChildNodes().item(j)).getNodeName())) {
+                                // 解析property标签
+                                Element property = (Element) bean.getChildNodes().item(j);
+                                String nameAttribute = property.getAttribute(NAME_ATTRIBUTE);
+                                String valueAttribute = property.getAttribute(VALUE_ATTRIBUTE);
+                                String refAttribute = property.getAttribute(REF_ATTRIBUTE);
+
+                                Object value = valueAttribute;
+
+                                if(StrUtil.isNotEmpty(refAttribute)) {
+                                    value = new BeanReference(refAttribute);
+                                }
+                                PropertyValue propertyValue = new PropertyValue(nameAttribute,value);
+                                beanDefinition.getPropertyValues().addPropertyValue(propertyValue);
+                            }
+                        }
+                    }
+                    getRegistry().registerBeanDefinitionRegistry(beanName,beanDefinition);
+                }
+            }
+        }
+
+    }
+
+    @Override
+    public void loadBeanDefinitions(String location) throws BeansException {
+        ResourceLoader resourceLoader = getResourceLoader();
+        Resource resource = resourceLoader.getResource(location);
+        loadBeanDefinitions(resource);
+    }
+}
+```
