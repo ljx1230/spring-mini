@@ -19,8 +19,5 @@ public class ApplicationContextTest {
         Car car = context.getBean("car",Car.class);
         System.out.println(car);
 
-//        for (String beanDefinitionName : context.getBeanDefinitionNames()) {
-//            System.out.println(beanDefinitionName);
-//        }
     }
 }

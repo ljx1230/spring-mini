@@ -712,3 +712,614 @@ public class XmlFileBeanDefinitionReader extends AbstractBeanDefinitionReader {
     }
 }
 ```
+
+编写测试代码测试，测试的spring配置文件如下：
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+    <bean id="person" class="com.ljx.springframework.test.ioc.bean.Person">
+        <property name="name" value="ljx"/>
+        <property name="age" value="18"/>
+        <property name="car" ref="car"/>
+    </bean>
+    <bean id="car" class="com.ljx.springframework.test.ioc.bean.Car">
+        <property name="brand" value="byd"/>
+    </bean>
+</beans>
+```
+测试代码如下：
+```java
+public class XmlFileDefineBeanTest {
+    @Test
+    public void testXmlFileParse() throws Exception {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        XmlFileBeanDefinitionReader xmlFileBeanDefinitionReader = new XmlFileBeanDefinitionReader(beanFactory);
+        ResourceLoader resourceLoader = new DefaultResourceLoader();
+        Resource resource = resourceLoader.getResource("classpath:spring.xml");
+        xmlFileBeanDefinitionReader.loadBeanDefinitions(resource);
+
+        Person person = (Person) beanFactory.getBean("person");
+        System.out.println(person);
+        Car car = (Car) beanFactory.getBean("car");
+        System.out.println(car);
+    }
+}
+```
+
+### spring后处理器的实现
+
+spring中有两种后处理器，分别是BeanFactoryPostProcessor和BeanPostProcessor。
+
+BeanFactoryPostProcessor是一种spring为我们提供的容器扩展机制，允许我们在bean实例化之前修改bean的定义信息，它在BeanDefinitionMap填充完毕之后，Bean实例化之前执行。
+
+BeanPostProcessor是另一种容器扩展机制，但是不同于BeanFactoryPostProcessor的是：BeanPostProcessor在bean实例化后修改bean或替换bean。BeanPostProcessor是后续实现AOP的关键。
+
+首先定义一下接口BeanFactoryPostProcessor，该接口仅有一个方法：postProcessBeanFactory
+它接收BeanFactory作为参数，该方法在所有BeanDefinition加载完成后，但在bean实例化之前，提供修改BeanDefinition属性值的机制。
+```java
+public interface BeanFactoryPostProcessor {
+    void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException;
+}
+```
+定义BeanPostProcessor接口：
+```java
+public interface BeanPostProcessor {
+    Object postProcessBeforeInitialization(Object bean,String beanName) throws BeansException;
+    Object postProcessAfterInitialization(Object bean,String beanName) throws BeansException;
+}
+```
+
+定义一个可自行配置的BeanFactory:
+```java
+public interface ConfigurableBeanFactory extends BeanFactory,SingletonBeanRegistry {
+    void addBeanPostProcessor(BeanPostProcessor beanPostProcessor);
+}
+```
+该接口继承自BeanFactory和SingletonBeanRegistry，因此它具有二者的功能。
+addBeanPostProcessor可以为bean添加后处理器。
+
+定义接口AutowireCapableBeanFactory，该接口提供执行BeanPostProcessor的postProcessBeforeInitialization方法和postProcessAfterInitialization方法。
+```java
+public interface AutowireCapableBeanFactory extends BeanFactory {
+    /**
+     * 执行BeanPostProcessors的postProcessBeforeInitialization方法
+     */
+    Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName) throws BeansException;
+    /**
+     * 执行BeanPostProcessors的postProcessAfterInitialization方法
+     */
+    Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName) throws BeansException;
+}
+```
+
+我们在AbstractAutowireCapableBeanFactory类中创建bean的时候需要调用bean后处理器的方法，因此我们需要保存所有定义的bean后处理器，我们把它放在AbstractBeanFactory中，
+添加成员变量以及添加bean后处理器的方法和获得后处理器的get方法：
+```java
+private final List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
+@Override
+public void addBeanPostProcessor(BeanPostProcessor beanPostProcessor) {
+        this.beanPostProcessorList.remove(beanPostProcessor);
+        this.beanPostProcessorList.add(beanPostProcessor);
+        }
+
+public List<BeanPostProcessor> getBeanPostProcessorList() {
+        return beanPostProcessorList;
+        }
+```
+
+修改一下AbstractAutowireCapableBeanFactory类，让它实现AutowireCapableBeanFactory接口，
+在这个类中，我们会创建bean，因此在此调用后处理器的方法。
+
+修改doCreateBean方法：
+```
+    protected Object doCreateBean(String beanName,BeanDefinition beanDefinition) {
+        Object bean = null;
+        try {
+            // 实例化bean
+            bean = createBeanInstance(beanDefinition);
+            // 为bean注入属性
+            applyPropertyValues(beanName, bean, beanDefinition);
+            //执行bean的初始化方法和BeanPostProcessor的前置和后置处理方法
+            bean = initializeBean(beanName,bean,beanDefinition);
+        } catch (Exception e) {
+            throw new BeansException("Instantiation of bean failed",e);
+        }
+        addSingleton(beanName,bean); // 加入容器中
+        return bean;
+    }
+```
+
+可以看到，我们为bean注入属性之后，调用一个initializeBean方法，在这个方法中，我们会执行bean的初始化方法以及后处理器的前置处理和后置处理方法。
+```
+    protected Object initializeBean(String beanName, Object bean, BeanDefinition beanDefinition) {
+        // 执行前置处理器
+        Object wrappedBean = applyBeanPostProcessorsBeforeInitialization(bean, beanName);
+        //TODO 后面会在此处执行bean的初始化方法
+        invokeInitMethods(beanName, wrappedBean, beanDefinition);
+
+        //执行BeanPostProcessor的后置处理
+        wrappedBean = applyBeanPostProcessorsAfterInitialization(bean, beanName);
+        return wrappedBean;
+    }
+```
+
+在该类中实现applyBeanPostProcessorsBeforeInitialization方法和applyBeanPostProcessorsAfterInitialization方法，这两个方法很简单，就是调用一下定义的bean后处理器方法
+```
+    @Override
+    public Object applyBeanPostProcessorsBeforeInitialization(Object existingBean, String beanName) throws BeansException {
+        Object res = existingBean;
+        for(var processor : getBeanPostProcessorList()) {
+            Object current = processor.postProcessBeforeInitialization(res,beanName);
+            if(current == null) {
+                return res;
+            }
+            res = current;
+        }
+        return res;
+    }
+    @Override
+    public Object applyBeanPostProcessorsAfterInitialization(Object existingBean, String beanName) throws BeansException {
+        Object res = existingBean;
+        for(var processor : getBeanPostProcessorList()) {
+            Object current = processor.postProcessAfterInitialization(res,beanName);
+            if(current == null) {
+                return res;
+            }
+            res = current;
+        }
+        return res;
+    }
+```
+BeanPostProcessor的实现完成后，再去完善一下BeanFactoryPostProcessor实现，这涉及到bean的属性的修改，
+因为BeanFactoryPostProcessor是在bean的信息（BeanDefinition）保存到map之前完成的，所以我们需要拿到对应的bean的定义信息，
+从而修改它（增加属性、删除属性、修改属性）。其中对于修改的操作，我们要直接修改原属性，因此添加属性的时候需要遍历修改一下，也就是在
+PropertyValues类中的addPropertyValue中先循环遍历判断一下，最后再添加：
+```java
+public class PropertyValues {
+    private final List<PropertyValue> propertyValueList = new ArrayList<>();
+    public void addPropertyValue(PropertyValue propertyValue) {
+        for (int i = 0; i < this.propertyValueList.size(); i++) {
+            PropertyValue currentPv = this.propertyValueList.get(i);
+            if (currentPv.getName().equals(propertyValue.getName())) {
+                //覆盖原有的属性值
+                this.propertyValueList.set(i, propertyValue);
+                return;
+            }
+        }
+        this.propertyValueList.add(propertyValue);
+    }
+}
+```
+
+再来测试一下上述代码，也就是演示一下两种后处理器的使用过程：
+
+首先创建spring配置文件：
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+    <bean id="person" class="com.ljx.springframework.test.ioc.bean.Person">
+        <property name="name" value="ljx"/>
+        <property name="age" value="21"/>
+        <property name="car" ref="car"/>
+    </bean>
+    <bean id="car" class="com.ljx.springframework.test.ioc.bean.Car">
+        <property name="brand" value="byd"/>
+    </bean>
+</beans>
+```
+接着我们来创建一个BeanFactoryPostProcessor的实现类，在bean创建之前，修改它的定义信息：
+```java
+public class CustomBeanFactoryPostProcessor implements BeanFactoryPostProcessor {
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory beanFactory) throws BeansException {
+        System.out.println("CustomBeanFactoryPostProcessor#postProcessBeanFactory");
+        BeanDefinition beanDefinition = beanFactory.getBeanDefinition("person");
+        PropertyValues propertyValues = beanDefinition.getPropertyValues();
+        propertyValues.addPropertyValue(new PropertyValue("name","xjy"));
+    }
+}
+```
+然后创建一个BeanPostProcessor的实现类，该类在初始化之前以及初始化方法之后修改bean：
+```java
+public class CustomerBeanPostProcessor implements BeanPostProcessor {
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        System.out.println("CustomerBeanPostProcessor#postProcessBeforeInitialization, beanName: " + beanName);
+        if("car".equals(beanName)) {
+            ((Car) bean).setBrand("兰博基尼");
+        }
+        return bean;
+    }
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        System.out.println("CustomerBeanPostProcessor#postProcessAfterInitialization, beanName: " + beanName);
+        return bean;
+    }
+}
+```
+编写测试类,将person的name从ljx修改为xjy，把car的brand从byd修改为lbjn:
+```java
+public class BeanFactoryPostProcessAndBeanPostProcessorTest {
+    @Test
+    public void testBeanFactoryPostProcessor() throws Exception {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        XmlFileBeanDefinitionReader beanDefinitionReader = new XmlFileBeanDefinitionReader(beanFactory);
+        beanDefinitionReader.loadBeanDefinitions("classpath:spring.xml");
+
+        //在所有BeanDefinition加载完成后，但在bean实例化之前，修改BeanDefinition的属性值
+        CustomBeanFactoryPostProcessor customBeanFactoryPostProcessor = new CustomBeanFactoryPostProcessor();
+        customBeanFactoryPostProcessor.postProcessBeanFactory(beanFactory);
+
+        Person person = (Person) beanFactory.getBean("person");
+        System.out.println(person);
+    }
+
+    @Test
+    public void testBeanPostProcessor() throws Exception {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        XmlFileBeanDefinitionReader beanDefinitionReader = new XmlFileBeanDefinitionReader(beanFactory);
+        beanDefinitionReader.loadBeanDefinitions("classpath:spring.xml");
+
+        // 添加bean实例化后的处理器
+        CustomerBeanPostProcessor customerBeanPostProcessor = new CustomerBeanPostProcessor();
+        beanFactory.addBeanPostProcessor(customerBeanPostProcessor);
+
+        Car car = (Car) beanFactory.getBean("car");
+        System.out.println(car);
+    }
+}
+```
+
+### 实现ApplicationContext
+
+ApplicationContext是比BeanFactory封装程度更高的容器，ApplicationContext既有BeanFactroy的功能
+还支持后处理器的的自动识别以及资源加载等功能。其中的核心方法是refresh方法。我们可以直接在xml配置文件中添加后处理器的信息，并且能被自动识别，不需要我们去手动添加后处理器了。
+
+首先，在BeanFactory接口中提供一个新的方法，可以通过bean的name和class直接获取到对应的bean，并且利用了泛型不需要强转：
+```java
+public interface BeanFactory {
+    Object getBean(String name) throws BeansException;
+    <T> T getBean(String name,Class<T> requiredType) throws BeansException;
+}
+```
+
+接着对ConfigurableListableBeanFactory进一步扩展让它继承自AutowireCapableBeanFactory, ConfigurableBeanFactory这两个接口，结合它们的所有功能
+
+然后创建ApplicationContext接口，该接口会继承ListableBeanFactory, HierarchicalBeanFactory, ResourceLoader三个接口，因为我们要完成资源加载以及自动添加后处理器的功能。
+```java
+public interface ApplicationContext extends ListableBeanFactory, HierarchicalBeanFactory, ResourceLoader {
+}
+```
+定义一个可配置的ApplicationContext：
+```java
+public interface ConfigurableApplicationContext extends ApplicationContext{
+    void refresh() throws BeansException; // ApplicationContext的核心方法
+}
+```
+
+为了扩展性，我们实现定义一个抽象类来实现一些ApplicationContext的通用操作,鉴于篇幅，其中获取bean的方法省略了.
+
+其中refreshBeanFactory和getBeanFactory方法不同的ApplicationContext可能有不同的实现方法，因此把它设置成一个抽象方法。
+
+```java
+public abstract class AbstractApplicationContext extends DefaultResourceLoader implements ConfigurableApplicationContext {
+    @Override
+    public void refresh() throws BeansException {
+        // 创建BeanFactory，加载BeanDefinition
+        refreshBeanFactory();
+        ConfigurableListableBeanFactory beanFactory = getBeanFactory();
+
+        // 实例化之前，执行BeanFactoryPostProcessor
+        invokeBeanFactoryPostProcessors(beanFactory);
+
+        // BeanPostProcessor得提前于其他Bean实例化之前注册
+        registerBeanPostProcessors(beanFactory);
+
+        //提前实例化单例bean
+        beanFactory.preInstantiateSingletons();
+    }
+
+    private void registerBeanPostProcessors(ConfigurableListableBeanFactory beanFactory) {
+        Map<String, BeanPostProcessor> beanPostProcessorMap = beanFactory.getBeansOfType(BeanPostProcessor.class);
+        for(BeanPostProcessor beanPostProcessor : beanPostProcessorMap.values()) {
+            beanFactory.addBeanPostProcessor(beanPostProcessor);
+        }
+    }
+
+    private void invokeBeanFactoryPostProcessors(ConfigurableListableBeanFactory beanFactory) {
+        Map<String, BeanFactoryPostProcessor> beanFactoryPostProcessorMap = beanFactory.getBeansOfType(BeanFactoryPostProcessor.class); // 获取到全部的BeanFactoryPostProcessor
+        for (BeanFactoryPostProcessor beanFactoryPostProcessor : beanFactoryPostProcessorMap.values()) {
+            beanFactoryPostProcessor.postProcessBeanFactory(beanFactory); // 执行后处理器的方法，修改bean定义信息
+        }
+    }
+
+    protected abstract void refreshBeanFactory() throws BeansException;
+
+    public abstract ConfigurableListableBeanFactory getBeanFactory();
+}
+```
+
+定义AbstractRefreshableApplicationContext类，该类继承自AbstractApplicationContext，它实现了refreshBeanFactory方法，在该方法中，我们只需要直接创建beanFactory即可，然后加载bean的定义信息，加载bean定义信息这步定义为抽象方法，由具体实现类完成：
+```java
+public abstract class AbstractRefreshableApplicationContext extends AbstractApplicationContext{
+    private DefaultListableBeanFactory beanFactory;
+
+    /**
+     * 创建BeanFactory，加载BeanDefinition
+     */
+    @Override
+    protected final void refreshBeanFactory() throws BeansException {
+        DefaultListableBeanFactory beanFactory = createBeanFactory();
+        loadBeanDefinitions(beanFactory);
+        this.beanFactory = beanFactory;
+    }
+
+    protected DefaultListableBeanFactory createBeanFactory() {
+        return new DefaultListableBeanFactory();
+    }
+
+    /**
+     * 加载BeanDefinition
+     * @param beanFactory
+     */
+    protected abstract void loadBeanDefinitions(DefaultListableBeanFactory beanFactory) throws BeansException;
+
+    @Override
+    public ConfigurableListableBeanFactory getBeanFactory() {
+        return beanFactory;
+    }
+}
+```
+
+创建AbstractXmlApplicationContext类，继承自上述类，实现上述loadBeanDefinitions方法，在这个方法里面创建XmlFileBeanDefinitionReader实例，读取spring配置文件，加载配置信息。
+```java
+public abstract class AbstractXmlApplicationContext extends AbstractRefreshableApplicationContext{
+    @Override
+    protected void loadBeanDefinitions(DefaultListableBeanFactory beanFactory) throws BeansException {
+        XmlFileBeanDefinitionReader beanDefinitionReader = new XmlFileBeanDefinitionReader(beanFactory,this);
+        String[] configLocations = getConfigLocations();
+        if(configLocations != null) {
+            beanDefinitionReader.loadBeanDefinitions(configLocations);
+        }
+    }
+    protected abstract String[] getConfigLocations();
+}
+```
+
+最后实现一个简单的ApplicationContext就是我们入门spring时候创建的第一个ApplicationContext：ClassPathXmlApplicationContext。这里面我们要定义成员变量存放配置文件的路径，用一个String数组保存就好了。
+```java
+public class ClassPathXmlApplicationContext extends AbstractXmlApplicationContext{
+    private String[] configLocations;
+
+    /**
+     * 从xml文件加载BeanDefinition，并且刷新上下文
+     * @param configLocations
+     */
+    public ClassPathXmlApplicationContext(String[] configLocations) throws BeansException {
+        this.configLocations = configLocations;
+        refresh();
+    }
+
+    public ClassPathXmlApplicationContext(String configLocation) throws BeansException {
+        this(new String[]{configLocation});
+    }
+
+    @Override
+    protected String[] getConfigLocations() {
+        return configLocations;
+    }
+}
+```
+
+接下来编写测试类，捋一遍执行流程，首先xml配置文件如下:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<beans>
+    <bean id="person" class="com.ljx.springframework.test.ioc.bean.Person">
+        <property name="name" value="ljx"/>
+        <property name="age" value="21"/>
+        <property name="car" ref="car"/>
+    </bean>
+    <bean id="car" class="com.ljx.springframework.test.ioc.bean.Car">
+        <property name="brand" value="byd"/>
+    </bean>
+
+    <bean class="com.ljx.springframework.test.ioc.common.CustomBeanFactoryPostProcessor"/>
+    <bean class="com.ljx.springframework.test.ioc.common.CustomerBeanPostProcessor"/>
+
+</beans>
+```
+在该配置类中定义了两个普通bean，还定义了两种后处理器。
+
+编写测试类:
+```java
+public class ApplicationContextTest {
+    @Test
+    public void testApplication() throws Exception{
+        ClassPathXmlApplicationContext context = new ClassPathXmlApplicationContext("classpath:spring.xml");
+        Person person = context.getBean("person", Person.class);
+        System.out.println(person);
+
+        Car car = context.getBean("car",Car.class);
+        System.out.println(car);
+    }
+}
+```
+
+实例化Application Context时，会完成bean工厂的创建以及bean信息的加载，bean信息加载完成后，执行beanFactory后处理器中的方法，修改bean的信息，接着将bean后处理器提前于其他bean实例化之前注册，最后提前实例化所有单例bean。
+在创建bean的过程中调用bean后处理器的方法。
+此时bean的生命周期如下：
+
+xml文件->BeanDefinition->BeanFactoryPostProcessor修改BeanDefinition->bean实例化->BeanPostProcessor前置处理->执行bean初始化方法->BeanPostProcessor后置处理->使用
+
+### bean的初始化方法和销毁
+
+在spring中，定义bean的初始化方法和销毁方法有三种方法：
+- 在xml文件中配置init-method和destroy-method
+- 继承自InitializingBean和DisposableBean
+- 在方法上加注解PostConstruct和PreDestroy
+
+我们实现前两种方法：
+
+为了实现第二种方法，我们先把这两个接口定义出来
+```java
+public interface DisposableBean {
+    void destroy() throws Exception;
+}
+```
+```java
+public interface InitializingBean {
+    void afterPropertiesSet() throws Exception;
+}
+```
+
+接着在BeanDefinition中增加属性initMethodName和destroyMethodName。
+
+初始化方法在AbstractAutowireCapableBeanFactory中的invokeInitMethods执行。
+```java
+    protected Object initializeBean(String beanName, Object bean, BeanDefinition beanDefinition) {
+        // 执行前置处理器
+        Object wrappedBean = applyBeanPostProcessorsBeforeInitialization(bean, beanName);
+
+        // 执行bean的初始化方法
+        try{
+            invokeInitMethods(beanName, wrappedBean, beanDefinition);
+        } catch (Throwable throwable) {
+            throw new BeansException("Invocation of init method of bean[" + beanName + "] failed", throwable);
+        }
+
+        //执行BeanPostProcessor的后置处理
+        wrappedBean = applyBeanPostProcessorsAfterInitialization(bean, beanName);
+        return wrappedBean;
+    }
+    private void invokeInitMethods(String beanName, Object bean, BeanDefinition beanDefinition) throws Throwable{
+        // 执行bean的初始化方法
+        if(bean instanceof InitializingBean) {
+            ((InitializingBean) bean).afterPropertiesSet();
+        }
+        String initMethodName = beanDefinition.getInitMethodName();
+        if(StrUtil.isNotEmpty(initMethodName)) {
+            Method initMethod = ClassUtil.getPublicMethod(beanDefinition.getBeanClass(),initMethodName);
+            if(initMethod == null) {
+                throw new BeansException("Could not find an init method named '" + initMethodName + "' on bean with name '" + beanName + "'");
+            }
+            initMethod.invoke(bean);
+            }
+        }
+```
+DefaultSingletonBeanRegistry中增加属性disposableBeans保存拥有销毁方法的bean
+
+```java
+public class DefaultSingletonBeanRegistry implements SingletonBeanRegistry {
+
+    private Map<String,Object> singletonObjects = new HashMap<>();
+
+    private final Map<String, DisposableBean> disposableBeans = new HashMap<>();
+
+    @Override
+    public Object getSingleton(String beanName) {
+        return singletonObjects.get(beanName);
+    }
+
+    protected void addSingleton(String beanName,Object singletonObject) {
+        singletonObjects.put(beanName,singletonObject);
+    }
+
+    public void registerDisposableBean(String beanName, DisposableBean bean) {
+        disposableBeans.put(beanName,bean);
+    }
+
+    public void destroySingletons() {
+        Set<String> beanNames = disposableBeans.keySet();
+        for (String beanName : beanNames) {
+            DisposableBean disposableBean = disposableBeans.remove(beanName);
+            try {
+                disposableBean.destroy();
+            } catch (Exception e) {
+                throw new BeansException("Destroy method on bean with name '" + beanName + "' threw an exception", e);
+            }
+        }
+    }
+}
+```
+
+拥有销毁方法的bean在AbstractAutowireCapableBeanFactory的方法registerDisposableBeanIfNecessary中注册到disposableBeans中。
+
+```java
+    protected void registerDisposableBeanIfNecessary(String beanName, Object bean, BeanDefinition beanDefinition) {
+        if(bean instanceof DisposableBean || StrUtil.isNotEmpty(beanDefinition.getDestroyMethodName())) {
+            registerDisposableBean(beanName,new DisposableBeanAdapter(bean,beanName,beanDefinition));
+        }
+    }
+```
+
+其中DisposableBeanAdapter类继承自DisposableBean，该类的存在是为了防止bean既定义了自己的销毁方法又继承自DisposableBean，导致销毁方法执行两次。
+```java
+public class DisposableBeanAdapter implements DisposableBean {
+
+    private final Object bean;
+
+    private final String beanName;
+
+    private final String destroyMethodName;
+
+    public DisposableBeanAdapter(Object bean, String beanName, BeanDefinition beanDefinition) {
+        this.bean = bean;
+        this.beanName = beanName;
+        this.destroyMethodName = beanDefinition.getDestroyMethodName();
+    }
+
+    @Override
+    public void destroy() throws Exception {
+        if(bean instanceof DisposableBean) {
+            ((DisposableBean) bean).destroy();
+        }
+        //避免同时继承自DisposableBean，且自定义方法与DisposableBean方法同名，销毁方法执行两次的情况
+        if(StrUtil.isNotEmpty(destroyMethodName) && !(bean instanceof DisposableBean && "destroy".equals(this.destroyMethodName))) {
+            // 执行自定义方法
+            Method destroyMethod = ClassUtil.getPublicMethod(bean.getClass(),destroyMethodName);
+            if(destroyMethod == null) {
+                throw new BeansException("Couldn't find a destroy method named '" + destroyMethodName + "' on bean with name '" + beanName + "'");
+            }
+            destroyMethod.invoke(bean);
+        }
+    }
+}
+```
+
+至此，bean的生命周期如下所示：
+![bean的生命周期](./assets/README-1706107178644.png)
+
+### Aware接口实现
+
+这个实现很简单，只是实现BeanFactoryAware接口的类可以感知到自己所处的beanFactory。
+
+只要在AbstractAutowireCapableBeanFactory的initializeBean方法开头添加以下代码即可
+```
+if(bean instanceof BeanFactoryAware) {
+    ((BeanFactoryAware) bean).setBeanFactory(this);
+}
+```
+
+让实现ApplicationContextAware接口的类可以感知到自己所处的applicationContext。可以通过bean的后处理器的前置处理实现。
+```java
+public class ApplicationContextAwareProcessor implements BeanPostProcessor {
+    private final ApplicationContext applicationContext;
+    public ApplicationContextAwareProcessor(ApplicationContext applicationContext) {
+        this.applicationContext = applicationContext;
+    }
+    @Override
+    public Object postProcessBeforeInitialization(Object bean, String beanName) throws BeansException {
+        if(bean instanceof ApplicationContextAware) {
+            ((ApplicationContextAware) bean).setApplicationContext(this.applicationContext);
+        }
+        return bean;
+    }
+
+    @Override
+    public Object postProcessAfterInitialization(Object bean, String beanName) throws BeansException {
+        return bean;
+    }
+}
+```
+在ApplicationContext类中的refresh方法中添加该后处理器。
