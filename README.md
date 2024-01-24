@@ -104,8 +104,8 @@ public abstract class AbstractBeanFactory extends DefaultSingletonBeanRegistry i
 ```
 好的，接下来我们继续往下扩展功能，我们在spring项目中，定义了Bean之后，
 根据Bean定义的信息，我们是可以往这个Bean中自动注入属性的，因此我们创建一个抽象类AbstractAutowireCapableBeanFactory
-，这个抽象类继承自我们刚刚创建的AbstractBeanFactory，并且实现了createBean方法，这个方法中我们调用doCreateBean方法，
-之后注入属性的过程，我们就会卸载doCreateBean中，目前只是先简单创建一下对象
+，这个抽象类继承自我们刚刚创建的AbstractBeanFactory，并且实现了createBean方法，这个方法中我们调用doCreateBean方法。
+之后为bean注入属性的过程，我们会写在doCreateBean中，目前只是先简单创建一下对象
 ```java
 public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFactory{
     @Override
@@ -249,5 +249,177 @@ public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFac
 }
 ```
 
-
 ### 给Bean注入属性
+
+我们在xml文件中写spring配置文件时候，定义了一个有属性的bean之后，我们还要在bean标签下定义property标签，里面描述了这个bean中各个属性的值，因此这些值我们也要记录下来，我们定义一个类表示单个property的信息，
+其中包括属性名和属性的值，该类的全部信息如下：
+```java
+public class PropertyValue {
+    private final String name;
+    private final String value;
+    public PropertyValue(String name, String value) {
+        this.name = name;
+        this.value = value;
+    }
+    public String getName() {
+        return name;
+    }
+    public String getValue() {
+        return value;
+    }
+}
+```
+每个bean会有若干属性，因此我们还要定义一个类，用数组保存某个bean的全部属性：
+```java
+public class PropertyValues {
+    private final List<PropertyValue> propertyValueList = new ArrayList<>();
+    public void addPropertyValue(PropertyValue propertyValue) {
+        propertyValueList.add(propertyValue);
+    }
+    public PropertyValue[] getPropertyValues() {
+        return this.propertyValueList.toArray(new PropertyValue[0]);
+    }
+    public PropertyValue getPropertyValue(String propertyName) {
+        for(var propertyValue : propertyValueList) {
+            if(propertyValue.getName().equals(propertyName)) {
+                return propertyValue;
+            }
+        }
+        return null;
+    }
+}
+```
+接着我们去修改BeanDefinition，在这里面我们既要保存bean的class类型，还要保存这个bean的所有属性的信息，
+因此我们要添加一个PropertyValues类型的成员变量，修改如下：
+```java
+public class BeanDefinition {
+    private Class beanClass;
+    private PropertyValues propertyValues;
+    public BeanDefinition(Class beanClass) {
+        this(beanClass,null);
+    }
+    public BeanDefinition(Class beanClass, PropertyValues propertyValues) {
+        this.beanClass = beanClass;
+        this.propertyValues = propertyValues != null ? propertyValues : new PropertyValues();
+    }
+    public Class getBeanClass() {
+        return beanClass;
+    }
+    public void setBeanClass(Class beanClass) {
+        this.beanClass = beanClass;
+    }
+
+    public PropertyValues getPropertyValues() {
+        return propertyValues;
+    }
+
+    public void setPropertyValues(PropertyValues propertyValues) {
+        this.propertyValues = propertyValues;
+    }
+}
+```
+添加该信息后，在AbstractAutowireCapableBeanFactory类中，我们要在创建bean的时候为其注入属性，首先选择给定的实例化策略实例化bean，
+接着再添加一个方法为其注入属性，该方法接收三个参数：beanName、bean实例以及bean的相关信息。
+在这个方法中，我们首先获取bean的class类型，以便后续通过反射调用其set方法，接着我们遍历bean信息中的属性信息
+，获取属性名和值，通过反射获取属性名对应的属性类型，使用拼接字符串的方式获取set方法名，反射获取该set方法，
+最后反射调用该方法，为bean实例注入属性。
+```java
+public abstract class AbstractAutowireCapableBeanFactory extends AbstractBeanFactory{
+    protected Object doCreateBean(String beanName,BeanDefinition beanDefinition) {
+        Object bean = null;
+        try {
+            // 实例化bean
+            bean = createBeanInstance(beanDefinition);
+            // 为bean注入属性
+            applyPropertyValues(beanName, bean, beanDefinition);
+        } catch (Exception e) {
+            throw new BeansException("Instantiation of bean failed",e);
+        }
+        addSingleton(beanName,bean); // 加入容器中
+        return bean;
+    }
+    // 为bean注入属性
+    protected void applyPropertyValues(String beanName,Object bean,BeanDefinition beanDefinition) {
+        try {
+            Class beanClass = beanDefinition.getBeanClass();
+            for(PropertyValue propertyValue : beanDefinition.getPropertyValues().getPropertyValues()) {
+                String name = propertyValue.getName();
+                String value = propertyValue.getValue();
+                Class<?> type = beanClass.getDeclaredField(name).getType();
+                String methodName = "set" + name.substring(0,1).toUpperCase() + name.substring(1); // 获取set方法名
+                Method method = beanClass.getDeclaredMethod(methodName, new Class[]{type});
+                method.invoke(bean,new Object[]{value});
+            }
+        } catch (Exception e) {
+            throw new BeansException("Error setting property values for bean: " + beanName, e);
+        }
+    }
+}
+```
+### 为bean注入其他bean
+上一步已经完成了为bean注入基本属性，但是如果一个bean的属性是其他bean呢？上面的方法就没法完成了，
+因此我们再定义一个BeanReference类，这个类表示一种特殊的属性值，因此我们要修改之前创建的PropertyValue类，
+将其成员变量value的类型改为Object，我们还可以利用hutool工具类更简单的完成为bean注入属性这件事情，
+BeanReference类如下：
+```java
+public class BeanReference {
+    private final String beanName;
+    public BeanReference(String beanName) {
+        this.beanName = beanName;
+    }
+    public String getBeanName() {
+        return beanName;
+    }
+}
+```
+接着我们会在注入属性的方法中判断，当前遍历到的属性是不是BeanReference类型，如果是的话，
+我们会根据BeanReference中获取beanName，然后获取bean，接着将value设置为bean，以完成属性的注入，
+此时applyPropertyValues的for循环中的代码如下：
+```java
+for(PropertyValue propertyValue : beanDefinition.getPropertyValues().getPropertyValues()) {
+        String name = propertyValue.getName();
+        Object value = propertyValue.getValue();
+        if(value instanceof BeanReference) {
+            // 如果注入的属性是一个Bean，则获取这个bean
+            BeanReference beanReference = (BeanReference) value;
+            value = getBean(beanReference.getBeanName());
+        }
+        BeanUtil.setFieldValue(bean,name,value);
+}
+```
+
+此时bean的属性注入已经完成，编写测试代码,通过测试。
+```java
+public class PopulateBeanWithPropertyValuesTest {
+    @Test
+    public void testPopulateBeanWithPropertyValues() throws Exception {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        PropertyValues propertyValues = new PropertyValues();
+        propertyValues.addPropertyValue(new PropertyValue("name","ljx"));
+        propertyValues.addPropertyValue(new PropertyValue("age",21));
+        BeanDefinition beanDefinition = new BeanDefinition(Person.class,propertyValues);
+        beanFactory.registerBeanDefinitionRegistry("person",beanDefinition);
+        Person person = (Person) beanFactory.getBean("person");
+        System.out.println(person);
+    }
+    @Test
+    public void testPopulateBeanWithBean() throws Exception {
+        DefaultListableBeanFactory beanFactory = new DefaultListableBeanFactory();
+        // 注册Car示例
+        PropertyValues propertyValues = new PropertyValues();
+        propertyValues.addPropertyValue(new PropertyValue("brand","byd"));
+        BeanDefinition beanDefinition = new BeanDefinition(Car.class,propertyValues);
+        beanFactory.registerBeanDefinitionRegistry("car",beanDefinition);
+        // 注册Person对象，Person对象中组合了Car对象
+        propertyValues = new PropertyValues();
+        propertyValues.addPropertyValue(new PropertyValue("name","ljx"));
+        propertyValues.addPropertyValue(new PropertyValue("age",21));
+        propertyValues.addPropertyValue(new PropertyValue("car",new BeanReference("car")));
+        BeanDefinition personBeanDefinition = new BeanDefinition(Person.class,propertyValues);
+        beanFactory.registerBeanDefinitionRegistry("person",personBeanDefinition);
+        System.out.println(beanFactory.getBean("car"));
+        System.out.println(beanFactory.getBean("person"));
+
+    }
+}
+```

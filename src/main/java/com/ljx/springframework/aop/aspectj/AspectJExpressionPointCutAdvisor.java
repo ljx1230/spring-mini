@@ -16,10 +16,12 @@ public class AspectJExpressionPointCutAdvisor {
 
     public void setExpression(String expression) {
         this.expression = expression;
-        this.pointCut = new AspectJExpressionPointCut(expression);
     }
 
     public PointCut getPointCut() {
+        if(pointCut == null) {
+            pointCut = new AspectJExpressionPointCut(expression);
+        }
         return pointCut;
     }
 
