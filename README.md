@@ -1,4 +1,4 @@
-# Spring简易版实现 开发手册
+# Spring简易版实现
 ### 实现BeanDefinition 和 BeanDefinitionRegistry
 
 首先，我们可以创建一个最简单的容器——BeanFactory。这个BeanFactory中定义了一个Map，我们可以根据Bean的名字，取出Bean对象。
